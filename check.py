@@ -56,22 +56,32 @@ def get_emails_to_check():
     conn.close()
     return emails
 
-def process_email(email_data, proxy_str):
+def process_email(email_data, proxy_str, counts):
     email_id, email, password = email_data
     result = check_imap_login(email, password, proxy_str)
     if result == True:
         update_email_status(email_id, 1)  # Live
+        counts['live'] += 1
     elif result == 'proxy_failed':
         update_email_status(email_id, 2)  # Unknown due to proxy fail
+        counts['unknown'] += 1
     else:
         update_email_status(email_id, 0)  # Died
+        counts['died'] += 1
 
 def check_emails(proxy_str, max_workers=10):
     emails = get_emails_to_check()
+    counts = {'live': 0, 'died': 0, 'unknown': 0}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_email, email_data, proxy_str) for email_data in emails]
+        futures = [executor.submit(process_email, email_data, proxy_str, counts) for email_data in emails]
         for future in as_completed(futures):
             future.result()  # Retrieve result to catch any potential exceptions
+
+    # Log the results
+    print(f"Total emails processed: {len(emails)}")
+    print(f"Live: {counts['live']}")
+    print(f"Died: {counts['died']}")
+    print(f"Unknown (proxy failed): {counts['unknown']}")
 
 if __name__ == '__main__':
     PROXY_STR = "username:password:domain:port"
